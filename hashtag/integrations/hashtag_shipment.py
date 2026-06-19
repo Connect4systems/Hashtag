@@ -81,6 +81,18 @@ def _get_response_value(response: dict, *keys):
 	return ""
 
 
+def _field_can_update(shipment, fieldname: str) -> bool:
+	if shipment.docstatus != 1:
+		return True
+	field = frappe.get_meta("Shipment").get_field(fieldname)
+	return bool(field and field.allow_on_submit)
+
+
+def _set_if_allowed(shipment, fieldname: str, value):
+	if value and not shipment.get(fieldname) and _field_can_update(shipment, fieldname):
+		shipment.set(fieldname, value)
+
+
 def build_shipment_payload(shipment) -> dict:
 	settings = frappe.get_single("Hashtag Settings")
 	_require(shipment, "delivery_address_name", _("Delivery Address"))
@@ -142,6 +154,20 @@ def create_hashtag_shipment(shipment_name: str):
 	return {
 		"tracking_number": shipment.get("hashtag_tracking_number") or shipment.get("awb_number"),
 		"shipment_id": shipment.get("hashtag_shipment_id") or shipment.get("shipment_id"),
+		"status": shipment.get("hashtag_status"),
+	}
+
+
+@frappe.whitelist()
+def mark_existing_hashtag_shipment(shipment_name: str, shipment_id: str = "", tracking_number: str = "", status: str = "Created"):
+	shipment = frappe.get_doc("Shipment", shipment_name)
+	response = {"response": [{"id": shipment_id, "waybill": tracking_number, "status_en": status}]}
+	_apply_hashtag_response(shipment, response)
+	shipment.save(ignore_permissions=True)
+	frappe.db.commit()
+	return {
+		"tracking_number": shipment.get("hashtag_tracking_number"),
+		"shipment_id": shipment.get("hashtag_shipment_id"),
 		"status": shipment.get("hashtag_status"),
 	}
 
@@ -213,16 +239,13 @@ def _apply_hashtag_response(shipment, response: dict):
 	shipment.hashtag_last_sync = frappe.utils.now_datetime()
 	shipment.hashtag_api_response = json.dumps(response, ensure_ascii=False, indent=2, default=str)
 
-	if shipment_id and not shipment.shipment_id:
-		shipment.shipment_id = shipment_id
-	if tracking_number and not shipment.awb_number:
-		shipment.awb_number = tracking_number
-	if label_url and not shipment.tracking_url:
-		shipment.tracking_url = label_url
+	_set_if_allowed(shipment, "shipment_id", shipment_id)
+	_set_if_allowed(shipment, "awb_number", tracking_number)
+	_set_if_allowed(shipment, "tracking_url", label_url)
 	if status and frappe.get_meta("Shipment").get_field("tracking_status"):
 		tracking_status_field = frappe.get_meta("Shipment").get_field("tracking_status")
 		options = [option.strip() for option in (tracking_status_field.options or "").split("\n") if option.strip()]
-		if not options or status in options:
+		if _field_can_update(shipment, "tracking_status") and (not options or status in options):
 			shipment.tracking_status = status
 
 

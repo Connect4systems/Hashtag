@@ -23,6 +23,7 @@ def install():
 	create_address_fields()
 	hide_address_integration_fields()
 	create_shipment_fields()
+	configure_shipment_integration_fields()
 	create_shipment_client_script()
 	create_address_client_script()
 	frappe.db.commit()
@@ -97,6 +98,7 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_shipment_created",
 					"fieldtype": "Check",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_section",
 					"label": "Hashtag Shipment Created",
 					"read_only": 1,
@@ -104,18 +106,21 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_sector_id",
 					"fieldtype": "Data",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_shipment_created",
 					"label": "Hashtag Sector ID",
 				},
 				{
 					"fieldname": "hashtag_keyword",
 					"fieldtype": "Data",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_sector_id",
 					"label": "Hashtag Keyword",
 				},
 				{
 					"fieldname": "hashtag_shipment_id",
 					"fieldtype": "Data",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_keyword",
 					"label": "Hashtag Shipment ID",
 					"read_only": 1,
@@ -123,6 +128,7 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_tracking_number",
 					"fieldtype": "Data",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_shipment_id",
 					"label": "Hashtag Tracking Number",
 					"read_only": 1,
@@ -130,6 +136,7 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_status",
 					"fieldtype": "Data",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_tracking_number",
 					"label": "Hashtag Status",
 					"read_only": 1,
@@ -142,6 +149,7 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_label_url",
 					"fieldtype": "Small Text",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_column_break",
 					"label": "Hashtag Label URL",
 					"read_only": 1,
@@ -149,6 +157,7 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_last_sync",
 					"fieldtype": "Datetime",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_label_url",
 					"label": "Hashtag Last Sync",
 					"read_only": 1,
@@ -156,6 +165,7 @@ def create_shipment_fields():
 				{
 					"fieldname": "hashtag_api_response",
 					"fieldtype": "Code",
+					"allow_on_submit": 1,
 					"insert_after": "hashtag_last_sync",
 					"label": "Hashtag API Response",
 					"options": "JSON",
@@ -165,6 +175,25 @@ def create_shipment_fields():
 		},
 		ignore_validate=True,
 	)
+
+
+def configure_shipment_integration_fields():
+	for fieldname in (
+		"hashtag_shipment_created",
+		"hashtag_sector_id",
+		"hashtag_keyword",
+		"hashtag_shipment_id",
+		"hashtag_tracking_number",
+		"hashtag_status",
+		"hashtag_label_url",
+		"hashtag_last_sync",
+		"hashtag_api_response",
+	):
+		custom_field = f"Shipment-{fieldname}"
+		if frappe.db.exists("Custom Field", custom_field):
+			doc = frappe.get_doc("Custom Field", custom_field)
+			doc.allow_on_submit = 1
+			doc.save(ignore_permissions=True)
 
 
 def create_address_fields():
