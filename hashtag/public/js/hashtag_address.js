@@ -1,86 +1,93 @@
 frappe.ui.form.on("Address", {
-	refresh(frm) {
-		if (frm.is_new()) {
-			return;
-		}
+	setup(frm) {
+		frm.set_df_property("city", "fieldtype", "Autocomplete");
+		frm.set_df_property("city", "description", __("Search and select a Hashtag delivery area."));
+	},
 
-		frm.add_custom_button(__("Select Hashtag Area"), () => {
-			open_hashtag_area_dialog(frm);
-		}, __("Hashtag"));
+	refresh(frm) {
+		setup_hashtag_city_search(frm);
+	},
+
+	city(frm) {
+		apply_selected_hashtag_city(frm);
+	},
+
+	validate(frm) {
+		if ((frm.doc.country || "") === "Egypt" && !frm.doc.hashtag_sector_id) {
+			frappe.throw(__("Select City/Town from the Hashtag delivery area list."));
+		}
 	},
 });
 
-function open_hashtag_area_dialog(frm) {
-	const dialog = new frappe.ui.Dialog({
-		title: __("Select Hashtag Area"),
-		fields: [
-			{
-				fieldname: "government",
-				fieldtype: "Autocomplete",
-				label: __("Government"),
-				reqd: 1,
-				options: [],
-				change() {
-					const government = dialog.get_value("government");
-					const gov = (dialog.hashtag_governments || []).find((row) => format_area(row) === government);
-					dialog.set_value("sector", "");
-					dialog.fields_dict.sector.set_data([]);
-					if (gov) {
-						load_hashtag_sectors(dialog, gov.id);
-					}
-				},
-			},
-			{
-				fieldname: "sector",
-				fieldtype: "Autocomplete",
-				label: __("Sector"),
-				reqd: 1,
-				options: [],
-			},
-		],
-		primary_action_label: __("Apply"),
-		primary_action() {
-			const gov = (dialog.hashtag_governments || []).find((row) => format_area(row) === dialog.get_value("government"));
-			const sector = (dialog.hashtag_sectors || []).find((row) => format_area(row) === dialog.get_value("sector"));
-			if (!gov || !sector) {
-				frappe.throw(__("Select a government and sector."));
+function setup_hashtag_city_search(frm) {
+	const city_field = frm.fields_dict.city;
+	if (!city_field) {
+		return;
+	}
+
+	city_field.get_query = (txt) => {
+		return frappe.call({
+			method: "hashtag.integrations.hashtag_shipment.search_hashtag_sectors",
+			args: { txt: txt || "" },
+		}).then((response) => {
+			frm.hashtag_sector_options = get_response_rows(response.message);
+			return frm.hashtag_sector_options.map(format_sector_option);
+		});
+	};
+
+	if (city_field.$input) {
+		city_field.$input.off(".hashtag");
+		city_field.$input.on("focus.hashtag", () => refresh_city_options(frm, city_field.$input.val() || ""));
+		city_field.$input.on("input.hashtag", frappe.utils.debounce(() => {
+			refresh_city_options(frm, city_field.$input.val() || "");
+		}, 250));
+	}
+}
+
+function refresh_city_options(frm, txt) {
+	frappe.call({
+		method: "hashtag.integrations.hashtag_shipment.search_hashtag_sectors",
+		args: { txt: txt || "" },
+		callback(response) {
+			frm.hashtag_sector_options = get_response_rows(response.message);
+			if (frm.fields_dict.city && frm.fields_dict.city.set_data) {
+				frm.fields_dict.city.set_data(frm.hashtag_sector_options.map(format_sector_option));
 			}
-
-			frm.set_value("hashtag_gov_id", gov.id);
-			frm.set_value("hashtag_gov_name", gov.name);
-			frm.set_value("hashtag_sector_id", sector.id);
-			frm.set_value("hashtag_sector_name", sector.name);
-			frm.set_value("hashtag_keyword", sector.key_words || "");
-			dialog.hide();
-		},
-	});
-
-	dialog.show();
-	load_hashtag_governments(dialog);
-}
-
-function load_hashtag_governments(dialog) {
-	frappe.call({
-		method: "hashtag.integrations.hashtag_shipment.get_hashtag_governments",
-		freeze: true,
-		freeze_message: __("Loading Hashtag governments..."),
-		callback(response) {
-			dialog.hashtag_governments = get_response_rows(response.message);
-			dialog.fields_dict.government.set_data(dialog.hashtag_governments.map(format_area));
 		},
 	});
 }
 
-function load_hashtag_sectors(dialog, gov_id) {
-	frappe.call({
-		method: "hashtag.integrations.hashtag_shipment.get_hashtag_sectors",
-		args: { gov_id },
-		freeze: true,
-		freeze_message: __("Loading Hashtag sectors..."),
-		callback(response) {
-			dialog.hashtag_sectors = get_response_rows(response.message);
-			dialog.fields_dict.sector.set_data(dialog.hashtag_sectors.map(format_area));
-		},
+function apply_selected_hashtag_city(frm) {
+	const value = frm.doc.city || "";
+	const sector = find_selected_sector(frm, value);
+	if (!sector) {
+		if (frm.doc.hashtag_sector_id && value !== frm.doc.hashtag_sector_name) {
+			frm.set_value("hashtag_gov_id", "");
+			frm.set_value("hashtag_gov_name", "");
+			frm.set_value("hashtag_sector_id", "");
+			frm.set_value("hashtag_sector_name", "");
+			frm.set_value("hashtag_keyword", "");
+		}
+		return;
+	}
+
+	frm.set_value("hashtag_gov_id", sector.gov_id || "");
+	frm.set_value("hashtag_gov_name", sector.gov_name || "");
+	frm.set_value("hashtag_sector_id", sector.id || "");
+	frm.set_value("hashtag_sector_name", sector.name || "");
+	frm.set_value("hashtag_keyword", sector.key_words || "");
+	frm.set_value("state", sector.gov_name || "");
+	frm.set_value("country", "Egypt");
+
+	if (value !== sector.name) {
+		frm.set_value("city", sector.name);
+	}
+}
+
+function find_selected_sector(frm, value) {
+	const id = String(value).split(" - ")[0];
+	return (frm.hashtag_sector_options || []).find((row) => {
+		return String(row.id) === id || row.name === value || format_sector_option(row) === value;
 	});
 }
 
@@ -97,6 +104,7 @@ function get_response_rows(message) {
 	return [];
 }
 
-function format_area(row) {
-	return `${row.id} - ${row.name}${row.gov_name ? ` (${row.gov_name})` : ""}`;
+function format_sector_option(row) {
+	const alias = row.alias ? ` - ${row.alias}` : "";
+	return `${row.id} - ${row.name}${alias}${row.gov_name ? ` (${row.gov_name})` : ""}`;
 }

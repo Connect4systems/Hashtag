@@ -17,6 +17,23 @@ HASHTAG_FIELDS = {
 	"hashtag_api_response": {"fieldtype": "Code", "label": "Hashtag API Response", "options": "JSON"},
 }
 
+SECTOR_ALIASES = {
+	"175": "Shorouk",
+	"185": "New Cairo",
+	"205": "Maadi",
+	"295": "Nasr City",
+	"305": "Madinaty",
+	"355": "Mohandessin",
+	"360": "Haram",
+	"365": "Faisal",
+	"500": "Obour",
+	"28947": "Heliopolis",
+	"28955": "Giza",
+	"28962": "6 October",
+	"28963": "Sheikh Zayed",
+	"28967": "Imbaba",
+}
+
 
 def _text(value) -> str:
 	return str(value or "").strip()
@@ -145,6 +162,27 @@ def get_hashtag_sectors(gov_id: str):
 		frappe.throw(_("Government ID is required."))
 	client = HashtagClient()
 	return client.post("/shipment.php?action=getAllSectors", {"gov_id": gov_id})
+
+
+@frappe.whitelist()
+def search_hashtag_sectors(txt: str = ""):
+	client = HashtagClient()
+	response = client.post("/shipment.php?action=getAllSectors", {"gov_id": ""})
+	txt = _text(txt).casefold()
+	rows = _response_rows(response)
+	if txt:
+		rows = [
+			row
+			for row in rows
+			if txt in _text(row.get("id")).casefold()
+			or txt in _text(row.get("name")).casefold()
+			or txt in _text(row.get("gov_name")).casefold()
+			or txt in _text(row.get("key_words")).casefold()
+			or txt in _text(SECTOR_ALIASES.get(str(row.get("id")))).casefold()
+		]
+	for row in rows:
+		row["alias"] = SECTOR_ALIASES.get(str(row.get("id")), "")
+	return {"response": rows[:50]}
 
 
 def _apply_hashtag_response(shipment, response: dict):

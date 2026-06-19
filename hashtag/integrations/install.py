@@ -16,6 +16,7 @@ def install():
 	for existing Hashtag repositories that already have their own app metadata files.
 	"""
 	create_address_fields()
+	hide_address_integration_fields()
 	create_shipment_fields()
 	create_shipment_client_script()
 	create_address_client_script()
@@ -138,12 +139,14 @@ def create_address_fields():
 					"fieldtype": "Section Break",
 					"insert_after": "city",
 					"label": "Hashtag Delivery Area",
+					"hidden": 1,
 				},
 				{
 					"fieldname": "hashtag_gov_id",
 					"fieldtype": "Data",
 					"insert_after": "hashtag_section",
 					"label": "Hashtag Government ID",
+					"hidden": 1,
 					"read_only": 1,
 				},
 				{
@@ -151,6 +154,7 @@ def create_address_fields():
 					"fieldtype": "Data",
 					"insert_after": "hashtag_gov_id",
 					"label": "Hashtag Government",
+					"hidden": 1,
 					"read_only": 1,
 				},
 				{
@@ -158,6 +162,7 @@ def create_address_fields():
 					"fieldtype": "Data",
 					"insert_after": "hashtag_gov_name",
 					"label": "Hashtag Sector ID",
+					"hidden": 1,
 					"read_only": 1,
 				},
 				{
@@ -165,6 +170,7 @@ def create_address_fields():
 					"fieldtype": "Data",
 					"insert_after": "hashtag_sector_id",
 					"label": "Hashtag Sector",
+					"hidden": 1,
 					"read_only": 1,
 				},
 				{
@@ -172,11 +178,29 @@ def create_address_fields():
 					"fieldtype": "Data",
 					"insert_after": "hashtag_sector_name",
 					"label": "Hashtag Keyword",
+					"hidden": 1,
+					"read_only": 1,
 				},
 			],
 		},
 		ignore_validate=True,
 	)
+
+
+def hide_address_integration_fields():
+	for fieldname in (
+		"hashtag_section",
+		"hashtag_gov_id",
+		"hashtag_gov_name",
+		"hashtag_sector_id",
+		"hashtag_sector_name",
+		"hashtag_keyword",
+	):
+		custom_field = f"Address-{fieldname}"
+		if frappe.db.exists("Custom Field", custom_field):
+			frappe.db.set_value("Custom Field", custom_field, "hidden", 1)
+			if fieldname != "hashtag_section":
+				frappe.db.set_value("Custom Field", custom_field, "read_only", 1)
 
 
 def create_shipment_client_script():
