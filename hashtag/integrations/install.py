@@ -139,6 +139,7 @@ def create_shipment_fields():
 					"allow_on_submit": 1,
 					"insert_after": "hashtag_tracking_number",
 					"label": "Hashtag Status",
+					"hidden": 1,
 					"read_only": 1,
 				},
 				{
@@ -179,7 +180,7 @@ def create_shipment_fields():
 
 def configure_shipment_integration_fields():
 	if frappe.db.exists("DocType", "Shipment"):
-		for fieldname in ("tracking_status", "status", "shipment_status"):
+		for fieldname in ("tracking_status",):
 			if frappe.get_meta("Shipment").get_field(fieldname):
 				make_property_setter("Shipment", fieldname, "allow_on_submit", 1, "Check", for_doctype=False)
 
@@ -198,6 +199,8 @@ def configure_shipment_integration_fields():
 		if frappe.db.exists("Custom Field", custom_field):
 			doc = frappe.get_doc("Custom Field", custom_field)
 			doc.allow_on_submit = 1
+			if fieldname == "hashtag_status":
+				doc.hidden = 1
 			doc.save(ignore_permissions=True)
 
 

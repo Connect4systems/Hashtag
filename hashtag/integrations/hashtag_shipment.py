@@ -34,6 +34,20 @@ SECTOR_ALIASES = {
 	"28967": "Imbaba",
 }
 
+TRACKING_STATUS_MAP = {
+	"delivered": "Delivered",
+	"delivery done": "Delivered",
+	"successful delivery": "Delivered",
+	"returned": "Returned",
+	"return": "Returned",
+	"return to origin": "Returned",
+	"rto": "Returned",
+	"refused": "Returned",
+	"rejected": "Returned",
+	"lost": "Lost",
+	"missing": "Lost",
+}
+
 
 def _text(value) -> str:
 	return str(value or "").strip()
@@ -94,6 +108,7 @@ def _set_if_allowed(shipment, fieldname: str, value):
 
 
 def _set_standard_status_if_allowed(shipment, status: str):
+	status = _standard_tracking_status(status)
 	for fieldname in ("tracking_status", "status", "shipment_status"):
 		field = frappe.get_meta("Shipment").get_field(fieldname)
 		if not field or not _field_can_update(shipment, fieldname):
@@ -102,6 +117,15 @@ def _set_standard_status_if_allowed(shipment, status: str):
 		if not options or status in options:
 			shipment.set(fieldname, status)
 			return
+
+
+def _standard_tracking_status(status: str) -> str:
+	status_text = _text(status)
+	status_key = status_text.casefold()
+	for keyword, tracking_status in TRACKING_STATUS_MAP.items():
+		if keyword in status_key:
+			return tracking_status
+	return "In Progress"
 
 
 def build_shipment_payload(shipment) -> dict:
@@ -165,7 +189,7 @@ def create_hashtag_shipment(shipment_name: str):
 	return {
 		"tracking_number": shipment.get("hashtag_tracking_number") or shipment.get("awb_number"),
 		"shipment_id": shipment.get("hashtag_shipment_id") or shipment.get("shipment_id"),
-		"status": shipment.get("hashtag_status"),
+		"status": shipment.get("tracking_status") or shipment.get("hashtag_status"),
 	}
 
 
@@ -183,7 +207,7 @@ def mark_existing_hashtag_shipment(shipment_name: str, shipment_id: str = "", tr
 	return {
 		"tracking_number": shipment.get("hashtag_tracking_number"),
 		"shipment_id": shipment.get("hashtag_shipment_id"),
-		"status": shipment.get("hashtag_status"),
+		"status": shipment.get("tracking_status") or shipment.get("hashtag_status"),
 	}
 
 
@@ -277,7 +301,7 @@ def sync_hashtag_status(shipment_name: str):
 	_apply_hashtag_response(shipment, response)
 	shipment.save(ignore_permissions=True)
 	frappe.db.commit()
-	return {"status": shipment.get("hashtag_status"), "response": response}
+	return {"status": shipment.get("tracking_status") or shipment.get("hashtag_status"), "response": response}
 
 
 @frappe.whitelist()
