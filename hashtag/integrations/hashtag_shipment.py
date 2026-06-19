@@ -113,6 +113,20 @@ def create_hashtag_shipment(shipment_name: str):
 	}
 
 
+@frappe.whitelist()
+def get_hashtag_governments():
+	client = HashtagClient()
+	return client.post("/shipment.php?action=getAllGov", {})
+
+
+@frappe.whitelist()
+def get_hashtag_sectors(gov_id: str):
+	if not _text(gov_id):
+		frappe.throw(_("Government ID is required."))
+	client = HashtagClient()
+	return client.post("/shipment.php?action=getAllSectors", {"gov_id": gov_id})
+
+
 def _apply_hashtag_response(shipment, response: dict):
 	item = _first_response_item(response)
 	tracking_number = _first(
