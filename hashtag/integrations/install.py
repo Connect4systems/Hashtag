@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import frappe
+from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+
+
+def install():
+	"""Install Hashtag Shipment integration into an existing Hashtag app/site.
+
+	This installer is intentionally callable with:
+		bench --site <site> execute hashtag.integrations.install.install
+
+	It avoids requiring a merge into an existing hooks.py/patches.txt, which makes it safer
+	for existing Hashtag repositories that already have their own app metadata files.
+	"""
+	create_shipment_fields()
+	create_shipment_client_script()
+	frappe.db.commit()
+
+
+def create_shipment_fields():
+	if not frappe.db.exists("DocType", "Shipment"):
+		return
+
+	create_custom_fields(
+		{
+			"Shipment": [
+				{
+					"fieldname": "hashtag_section",
+					"fieldtype": "Section Break",
+					"insert_after": "tracking_status_info",
+					"label": "Hashtag Integration",
+				},
+				{
+					"fieldname": "hashtag_shipment_created",
+					"fieldtype": "Check",
+					"insert_after": "hashtag_section",
+					"label": "Hashtag Shipment Created",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_shipment_id",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_shipment_created",
+					"label": "Hashtag Shipment ID",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_tracking_number",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_shipment_id",
+					"label": "Hashtag Tracking Number",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_status",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_tracking_number",
+					"label": "Hashtag Status",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_column_break",
+					"fieldtype": "Column Break",
+					"insert_after": "hashtag_status",
+				},
+				{
+					"fieldname": "hashtag_label_url",
+					"fieldtype": "Small Text",
+					"insert_after": "hashtag_column_break",
+					"label": "Hashtag Label URL",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_last_sync",
+					"fieldtype": "Datetime",
+					"insert_after": "hashtag_label_url",
+					"label": "Hashtag Last Sync",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_api_response",
+					"fieldtype": "Code",
+					"insert_after": "hashtag_last_sync",
+					"label": "Hashtag API Response",
+					"options": "JSON",
+					"read_only": 1,
+				},
+			],
+		},
+		ignore_validate=True,
+	)
+
+
+def create_shipment_client_script():
+	if not frappe.db.exists("DocType", "Client Script"):
+		return
+
+	script_name = "Hashtag Shipment Buttons"
+	js_path = Path(frappe.get_app_path("hashtag")) / "public" / "js" / "hashtag_shipment.js"
+	script = js_path.read_text(encoding="utf-8")
+
+	if frappe.db.exists("Client Script", script_name):
+		doc = frappe.get_doc("Client Script", script_name)
+	else:
+		doc = frappe.new_doc("Client Script")
+		doc.name = script_name
+
+	doc.dt = "Shipment"
+	doc.enabled = 1
+	doc.script = script
+	doc.save(ignore_permissions=True)
