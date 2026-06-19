@@ -148,23 +148,11 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"hashtag.tasks.all"
-# 	],
-# 	"daily": [
-# 		"hashtag.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"hashtag.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"hashtag.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"hashtag.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"hourly": [
+		"hashtag.integrations.hashtag_shipment.sync_open_hashtag_statuses",
+	],
+}
 
 # Testing
 # -------

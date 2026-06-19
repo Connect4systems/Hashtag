@@ -93,6 +93,17 @@ def _set_if_allowed(shipment, fieldname: str, value):
 		shipment.set(fieldname, value)
 
 
+def _set_standard_status_if_allowed(shipment, status: str):
+	for fieldname in ("tracking_status", "status", "shipment_status"):
+		field = frappe.get_meta("Shipment").get_field(fieldname)
+		if not field or not _field_can_update(shipment, fieldname):
+			continue
+		options = [option.strip() for option in (field.options or "").split("\n") if option.strip()]
+		if not options or status in options:
+			shipment.set(fieldname, status)
+			return
+
+
 def build_shipment_payload(shipment) -> dict:
 	settings = frappe.get_single("Hashtag Settings")
 	_require(shipment, "delivery_address_name", _("Delivery Address"))
@@ -161,6 +172,10 @@ def create_hashtag_shipment(shipment_name: str):
 @frappe.whitelist()
 def mark_existing_hashtag_shipment(shipment_name: str, shipment_id: str = "", tracking_number: str = "", status: str = "Created"):
 	shipment = frappe.get_doc("Shipment", shipment_name)
+	if shipment.docstatus == 2:
+		frappe.throw(_("Cannot update a cancelled Shipment."))
+	if not _text(tracking_number):
+		frappe.throw(_("Tracking Number / Waybill is required."))
 	response = {"response": [{"id": shipment_id, "waybill": tracking_number, "status_en": status}]}
 	_apply_hashtag_response(shipment, response)
 	shipment.save(ignore_permissions=True)
@@ -242,16 +257,15 @@ def _apply_hashtag_response(shipment, response: dict):
 	_set_if_allowed(shipment, "shipment_id", shipment_id)
 	_set_if_allowed(shipment, "awb_number", tracking_number)
 	_set_if_allowed(shipment, "tracking_url", label_url)
-	if status and frappe.get_meta("Shipment").get_field("tracking_status"):
-		tracking_status_field = frappe.get_meta("Shipment").get_field("tracking_status")
-		options = [option.strip() for option in (tracking_status_field.options or "").split("\n") if option.strip()]
-		if _field_can_update(shipment, "tracking_status") and (not options or status in options):
-			shipment.tracking_status = status
+	if status:
+		_set_standard_status_if_allowed(shipment, status)
 
 
 @frappe.whitelist()
 def sync_hashtag_status(shipment_name: str):
 	shipment = frappe.get_doc("Shipment", shipment_name)
+	if shipment.docstatus == 2:
+		frappe.throw(_("Cannot sync a cancelled Shipment."))
 	client = HashtagClient()
 	path = client.settings.tracking_path
 	if not path:
@@ -264,3 +278,29 @@ def sync_hashtag_status(shipment_name: str):
 	shipment.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"status": shipment.get("hashtag_status"), "response": response}
+
+
+@frappe.whitelist()
+def sync_open_hashtag_statuses(limit: int = 50):
+	shipments = frappe.get_all(
+		"Shipment",
+		filters={
+			"docstatus": ["!=", 2],
+			"hashtag_shipment_created": 1,
+			"hashtag_tracking_number": ["is", "set"],
+		},
+		fields=["name"],
+		limit_page_length=limit,
+		order_by="modified asc",
+	)
+
+	results = {"synced": 0, "failed": []}
+	for row in shipments:
+		try:
+			sync_hashtag_status(row.name)
+			results["synced"] += 1
+		except Exception as exc:
+			frappe.log_error(frappe.get_traceback(), f"Hashtag status sync failed for {row.name}")
+			results["failed"].append({"shipment": row.name, "error": str(exc)})
+
+	return results
