@@ -58,8 +58,8 @@ def configure_address_city_link():
 	if not frappe.db.exists("DocType", "Address") or not frappe.db.exists("DocType", "Hashtag Sector"):
 		return
 
-	make_property_setter("Address", "city", "fieldtype", "Link", "Select", for_doctype=False)
 	make_property_setter("Address", "city", "options", "Hashtag Sector", "Text", for_doctype=False)
+	make_property_setter("Address", "city", "fieldtype", "Link", "Select", for_doctype=False)
 	make_property_setter("Address", "city", "description", "Search and select a Hashtag delivery area.", "Small Text", for_doctype=False)
 
 
