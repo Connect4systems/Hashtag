@@ -59,8 +59,9 @@ def _get_response_value(response: dict, *keys):
 def build_shipment_payload(shipment) -> dict:
 	settings = frappe.get_single("Hashtag Settings")
 	_require(shipment, "delivery_address_name", _("Delivery Address"))
-	if not settings.default_sector_id:
-		frappe.throw(_("Default Sector ID is required in Hashtag Settings. Get it from Hashtag Get Sectors API."))
+	sector_id = _first(shipment.get("hashtag_sector_id"), settings.default_sector_id)
+	if not sector_id:
+		frappe.throw(_("Hashtag Sector ID is required on the Shipment or in Hashtag Settings. Get it from Hashtag Get Sectors API."))
 
 	contact = frappe.get_doc("Contact", shipment.delivery_contact) if frappe.db.exists("Contact", shipment.get("delivery_contact")) else None
 	address = frappe.get_doc("Address", shipment.delivery_address_name)
@@ -74,8 +75,8 @@ def build_shipment_payload(shipment) -> dict:
 		frappe.throw(_("Delivery contact mobile number is required before creating Hashtag shipment."))
 
 	return {
-		"sector_id": settings.default_sector_id,
-		"keyword": settings.default_keyword or "",
+		"sector_id": sector_id,
+		"keyword": _first(shipment.get("hashtag_keyword"), settings.default_keyword),
 		"product_name": shipment.description_of_content or shipment.name,
 		"product_desc": shipment.description_of_content or "",
 		"phone_1": phone_1,

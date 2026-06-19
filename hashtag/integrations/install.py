@@ -59,9 +59,21 @@ def create_shipment_fields():
 					"read_only": 1,
 				},
 				{
-					"fieldname": "hashtag_shipment_id",
+					"fieldname": "hashtag_sector_id",
 					"fieldtype": "Data",
 					"insert_after": "hashtag_shipment_created",
+					"label": "Hashtag Sector ID",
+				},
+				{
+					"fieldname": "hashtag_keyword",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_sector_id",
+					"label": "Hashtag Keyword",
+				},
+				{
+					"fieldname": "hashtag_shipment_id",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_keyword",
 					"label": "Hashtag Shipment ID",
 					"read_only": 1,
 				},
