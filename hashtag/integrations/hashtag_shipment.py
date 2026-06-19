@@ -36,6 +36,13 @@ def _first(*values):
 	return ""
 
 
+def _first_response_item(response: dict) -> dict:
+	items = response.get("response") if isinstance(response, dict) else None
+	if isinstance(items, list) and items and isinstance(items[0], dict):
+		return items[0]
+	return {}
+
+
 def _get_response_value(response: dict, *keys):
 	for key in keys:
 		value = response
@@ -50,51 +57,38 @@ def _get_response_value(response: dict, *keys):
 
 
 def build_shipment_payload(shipment) -> dict:
-	_require(shipment, "pickup_date", _("Pickup Date"))
-	_require(shipment, "pickup_from", _("Pickup from"))
-	_require(shipment, "pickup_to", _("Pickup to"))
+	settings = frappe.get_single("Hashtag Settings")
 	_require(shipment, "delivery_address_name", _("Delivery Address"))
-	_require(shipment, "description_of_content", _("Description of Content"))
+	if not settings.default_sector_id:
+		frappe.throw(_("Default Sector ID is required in Hashtag Settings. Get it from Hashtag Get Sectors API."))
+
+	contact = frappe.get_doc("Contact", shipment.delivery_contact) if frappe.db.exists("Contact", shipment.get("delivery_contact")) else None
+	address = frappe.get_doc("Address", shipment.delivery_address_name)
+	phone_1 = _first(
+		shipment.get("delivery_contact_mobile"),
+		contact.get("mobile_no") if contact else "",
+		contact.get("phone") if contact else "",
+		shipment.get("delivery_contact"),
+	)
+	if not phone_1:
+		frappe.throw(_("Delivery contact mobile number is required before creating Hashtag shipment."))
 
 	return {
-		"reference": shipment.name,
-		"shipment_type": shipment.shipment_type or "Goods",
-		"pickup_type": shipment.pickup_type or "Pickup",
-		"pickup": {
-			"date": str(shipment.pickup_date),
-			"from_time": str(shipment.pickup_from),
-			"to_time": str(shipment.pickup_to),
-			"type": shipment.pickup_from_type,
-			"company": shipment.pickup_company,
-			"customer": shipment.pickup_customer,
-			"supplier": shipment.pickup_supplier,
-			"address_name": shipment.pickup_address_name,
-			"address": shipment.pickup_address,
-			"contact_name": _first(shipment.pickup_contact_name, shipment.pickup_contact_person),
-			"contact_email": shipment.pickup_contact_email,
-			"contact": shipment.pickup_contact,
-		},
-		"delivery": {
-			"type": shipment.delivery_to_type,
-			"company": shipment.delivery_company,
-			"customer": shipment.delivery_customer,
-			"supplier": shipment.delivery_supplier,
-			"delivery_to": shipment.delivery_to,
-			"address_name": shipment.delivery_address_name,
-			"address": shipment.delivery_address,
-			"contact_name": shipment.delivery_contact_name,
-			"contact_email": shipment.delivery_contact_email,
-			"contact": shipment.delivery_contact,
-		},
-		"content": {
-			"description": shipment.description_of_content,
-			"value_of_goods": float(shipment.value_of_goods or 0),
-			"total_weight": float(shipment.total_weight or 0),
-			"pallets": shipment.pallets,
-			"incoterm": shipment.incoterm,
-		},
-		"parcels": [parcel.as_dict(no_nulls=True) for parcel in shipment.get("shipment_parcel", [])],
-		"delivery_notes": [row.as_dict(no_nulls=True) for row in shipment.get("shipment_delivery_note", [])],
+		"sector_id": settings.default_sector_id,
+		"keyword": settings.default_keyword or "",
+		"product_name": shipment.description_of_content or shipment.name,
+		"product_desc": shipment.description_of_content or "",
+		"phone_1": phone_1,
+		"phone_2": _first(contact.get("phone") if contact else "", contact.get("mobile_no") if contact else ""),
+		"price": int(float(shipment.value_of_goods or 0)),
+		"weight": str(shipment.total_weight or ""),
+		"address": _first(shipment.delivery_address, address.get_display()),
+		"notes": shipment.description_of_content or "",
+		"client_name": _first(shipment.delivery_contact_name, contact.get("full_name") if contact else "", shipment.delivery_to),
+		"order_id": shipment.name,
+		"email": _first(shipment.delivery_contact_email, contact.get("email_id") if contact else ""),
+		"client_id": "",
+		"quantity": str(len(shipment.get("shipment_parcel", [])) or 1),
 	}
 
 
@@ -120,9 +114,17 @@ def create_hashtag_shipment(shipment_name: str):
 
 
 def _apply_hashtag_response(shipment, response: dict):
-	tracking_number = _get_response_value(response, "tracking_number", "awb_number", "awb", "data.tracking_number", "data.awb_number", "data.awb")
-	shipment_id = _get_response_value(response, "shipment_id", "id", "data.shipment_id", "data.id")
-	status = _get_response_value(response, "status", "shipment_status", "data.status", "data.shipment_status") or "Created"
+	item = _first_response_item(response)
+	tracking_number = _first(
+		_get_response_value(item, "waybill"),
+		_get_response_value(response, "tracking_number", "awb_number", "awb", "data.tracking_number", "data.awb_number", "data.awb"),
+	)
+	shipment_id = _first(_get_response_value(item, "id"), _get_response_value(response, "shipment_id", "id", "data.shipment_id", "data.id"))
+	status = _first(
+		_get_response_value(item, "status_en", "name_en", "status_ar", "name_ar"),
+		_get_response_value(response, "status", "shipment_status", "data.status", "data.shipment_status"),
+		"Created",
+	)
 	label_url = _get_response_value(response, "label_url", "tracking_url", "data.label_url", "data.tracking_url")
 
 	shipment.hashtag_shipment_created = 1
@@ -153,11 +155,10 @@ def sync_hashtag_status(shipment_name: str):
 	path = client.settings.tracking_path
 	if not path:
 		frappe.throw(_("Tracking Path is not configured in Hashtag Settings."))
-	path = path.format(
-		shipment_id=shipment.get("hashtag_shipment_id") or shipment.get("shipment_id") or "",
-		tracking_number=shipment.get("hashtag_tracking_number") or shipment.get("awb_number") or "",
-	)
-	response = client.get(path)
+	waybill = shipment.get("hashtag_tracking_number") or shipment.get("awb_number")
+	if not waybill:
+		frappe.throw(_("Hashtag Waybill is required before syncing status."))
+	response = client.post(path, {"waybill": waybill})
 	_apply_hashtag_response(shipment, response)
 	shipment.save(ignore_permissions=True)
 	frappe.db.commit()

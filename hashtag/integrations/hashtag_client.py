@@ -26,7 +26,9 @@ class HashtagClient:
 		return urljoin(f"{self.settings.base_url.rstrip('/')}/", (path or "").lstrip("/"))
 
 	def _headers(self) -> dict[str, str]:
-		headers = {"Accept": "application/json", "Content-Type": "application/json"}
+		headers = {"Accept": "application/json"}
+		if self.settings.auth_scheme != "Form Credentials":
+			headers["Content-Type"] = "application/json"
 		if self.settings.auth_scheme == "Headers":
 			headers.update({"X-API-Name": self.settings.api_name, "X-API-Password": self.api_password})
 		return headers
@@ -40,16 +42,21 @@ class HashtagClient:
 		if self.settings.auth_scheme == "JSON Credentials":
 			payload = payload.copy()
 			payload.update({"api_name": self.settings.api_name, "api_password": self.api_password})
+		if self.settings.auth_scheme == "Form Credentials":
+			payload = payload.copy()
+			payload.update({"user": self.settings.api_name, "password": self.api_password})
 		return payload
 
 	def post(self, path: str, payload: dict) -> dict:
 		url = self._url(path)
+		payload = self._payload(payload)
+		request_kwargs = {"data": payload} if self.settings.auth_scheme == "Form Credentials" else {"json": payload}
 		try:
 			response = requests.post(
 				url,
 				auth=self._auth(),
 				headers=self._headers(),
-				json=self._payload(payload),
+				**request_kwargs,
 				timeout=self.settings.request_timeout or 30,
 			)
 		except requests.RequestException as exc:

@@ -20,6 +20,24 @@ def install():
 	frappe.db.commit()
 
 
+def configure_settings(api_password: str, default_sector_id: str | None = None, default_keyword: str | None = None):
+	"""Apply the documented Hashtag Express API defaults to Hashtag Settings."""
+	doc = frappe.get_single("Hashtag Settings")
+	doc.enabled = 1
+	doc.base_url = "https://hashtag-express.com/api"
+	doc.create_shipment_path = "/shipment.php?action=addShipment"
+	doc.tracking_path = "/shipment.php?action=statusHistory"
+	doc.auth_scheme = "Form Credentials"
+	doc.api_name = "hashtag"
+	doc.api_password = api_password
+	if default_sector_id is not None:
+		doc.default_sector_id = default_sector_id
+	if default_keyword is not None:
+		doc.default_keyword = default_keyword
+	doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+
 def create_shipment_fields():
 	if not frappe.db.exists("DocType", "Shipment"):
 		return
