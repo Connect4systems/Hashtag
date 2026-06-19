@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "autoname": "field:sector_id",
+ "creation": "2026-06-19 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "sector_id",
+  "sector_name",
+  "sector_label",
+  "alias",
+  "column_break_area",
+  "gov_id",
+  "gov_name",
+  "keyword",
+  "enabled"
+ ],
+ "fields": [
+  {"fieldname": "sector_id", "fieldtype": "Data", "in_list_view": 1, "label": "Sector ID", "reqd": 1, "unique": 1},
+  {"fieldname": "sector_name", "fieldtype": "Data", "in_list_view": 1, "label": "Sector Name", "reqd": 1},
+  {"fieldname": "sector_label", "fieldtype": "Data", "in_global_search": 1, "in_list_view": 1, "label": "Sector Label", "read_only": 1},
+  {"fieldname": "alias", "fieldtype": "Data", "in_global_search": 1, "label": "Alias"},
+  {"fieldname": "column_break_area", "fieldtype": "Column Break"},
+  {"fieldname": "gov_id", "fieldtype": "Data", "in_list_view": 1, "label": "Government ID"},
+  {"fieldname": "gov_name", "fieldtype": "Data", "in_global_search": 1, "in_list_view": 1, "label": "Government"},
+  {"fieldname": "keyword", "fieldtype": "Small Text", "label": "Keyword"},
+  {"default": "1", "fieldname": "enabled", "fieldtype": "Check", "in_list_view": 1, "label": "Enabled"}
+ ],
+ "links": [],
+ "modified": "2026-06-19 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Hashtag",
+ "name": "Hashtag Sector",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"read": 1, "role": "Sales User"},
+  {"read": 1, "role": "Stock User"}
+ ],
+ "search_fields": "sector_name,sector_label,alias,gov_name,keyword",
+ "show_title_field_in_link": 1,
+ "sort_field": "sector_name",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "sector_label",
+ "track_changes": 1
+}

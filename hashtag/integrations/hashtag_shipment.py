@@ -87,8 +87,14 @@ def build_shipment_payload(shipment) -> dict:
 
 	contact = frappe.get_doc("Contact", shipment.delivery_contact) if frappe.db.exists("Contact", shipment.get("delivery_contact")) else None
 	address = frappe.get_doc("Address", shipment.delivery_address_name)
-	sector_id = _first(shipment.get("hashtag_sector_id"), address.get("hashtag_sector_id"), settings.default_sector_id)
-	keyword = _first(shipment.get("hashtag_keyword"), address.get("hashtag_keyword"), settings.default_keyword)
+	sector_id = _first(shipment.get("hashtag_sector_id"), address.get("hashtag_sector_id"), address.get("city"), settings.default_sector_id)
+	sector = frappe.get_doc("Hashtag Sector", sector_id) if frappe.db.exists("Hashtag Sector", sector_id) else None
+	keyword = _first(
+		shipment.get("hashtag_keyword"),
+		address.get("hashtag_keyword"),
+		sector.get("keyword") if sector else "",
+		settings.default_keyword,
+	)
 	if not sector_id:
 		frappe.throw(_("Hashtag Sector ID is required on the delivery Address, Shipment, or Hashtag Settings. Select the Hashtag area on the Address."))
 	phone_1 = _first(

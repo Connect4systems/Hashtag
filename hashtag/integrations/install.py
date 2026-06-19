@@ -4,6 +4,10 @@ from pathlib import Path
 
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
+from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+from hashtag.integrations.hashtag_client import HashtagClient
+from hashtag.integrations.hashtag_shipment import SECTOR_ALIASES, _response_rows
 
 
 def install():
@@ -15,12 +19,48 @@ def install():
 	It avoids requiring a merge into an existing hooks.py/patches.txt, which makes it safer
 	for existing Hashtag repositories that already have their own app metadata files.
 	"""
+	configure_address_city_link()
 	create_address_fields()
 	hide_address_integration_fields()
 	create_shipment_fields()
 	create_shipment_client_script()
 	create_address_client_script()
 	frappe.db.commit()
+
+
+@frappe.whitelist()
+def sync_hashtag_sectors():
+	"""Sync Hashtag sectors into the local Hashtag Sector master."""
+	client = HashtagClient()
+	response = client.post("/shipment.php?action=getAllSectors", {"gov_id": ""})
+	count = 0
+	for row in _response_rows(response):
+		sector_id = str(row.get("id") or "").strip()
+		if not sector_id:
+			continue
+
+		doc = frappe.get_doc("Hashtag Sector", sector_id) if frappe.db.exists("Hashtag Sector", sector_id) else frappe.new_doc("Hashtag Sector")
+		doc.sector_id = sector_id
+		doc.sector_name = row.get("name") or sector_id
+		doc.gov_id = row.get("gov_id") or ""
+		doc.gov_name = row.get("gov_name") or ""
+		doc.keyword = row.get("key_words") or ""
+		doc.alias = SECTOR_ALIASES.get(sector_id, "")
+		doc.enabled = 1
+		doc.save(ignore_permissions=True)
+		count += 1
+
+	frappe.db.commit()
+	return count
+
+
+def configure_address_city_link():
+	if not frappe.db.exists("DocType", "Address") or not frappe.db.exists("DocType", "Hashtag Sector"):
+		return
+
+	make_property_setter("Address", "city", "fieldtype", "Link", "Select", for_doctype=False)
+	make_property_setter("Address", "city", "options", "Hashtag Sector", "Text", for_doctype=False)
+	make_property_setter("Address", "city", "description", "Search and select a Hashtag delivery area.", "Small Text", for_doctype=False)
 
 
 def configure_settings(api_password: str, default_sector_id: str | None = None, default_keyword: str | None = None):
@@ -198,9 +238,11 @@ def hide_address_integration_fields():
 	):
 		custom_field = f"Address-{fieldname}"
 		if frappe.db.exists("Custom Field", custom_field):
-			frappe.db.set_value("Custom Field", custom_field, "hidden", 1)
+			doc = frappe.get_doc("Custom Field", custom_field)
+			doc.hidden = 1
 			if fieldname != "hashtag_section":
-				frappe.db.set_value("Custom Field", custom_field, "read_only", 1)
+				doc.read_only = 1
+			doc.save(ignore_permissions=True)
 
 
 def create_shipment_client_script():
