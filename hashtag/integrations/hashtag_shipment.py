@@ -43,6 +43,14 @@ def _first_response_item(response: dict) -> dict:
 	return {}
 
 
+def _response_rows(response: dict) -> list[dict]:
+	for key in ("response", "data"):
+		rows = response.get(key) if isinstance(response, dict) else None
+		if isinstance(rows, list):
+			return rows
+	return []
+
+
 def _get_response_value(response: dict, *keys):
 	for key in keys:
 		value = response
@@ -59,12 +67,13 @@ def _get_response_value(response: dict, *keys):
 def build_shipment_payload(shipment) -> dict:
 	settings = frappe.get_single("Hashtag Settings")
 	_require(shipment, "delivery_address_name", _("Delivery Address"))
-	sector_id = _first(shipment.get("hashtag_sector_id"), settings.default_sector_id)
-	if not sector_id:
-		frappe.throw(_("Hashtag Sector ID is required on the Shipment or in Hashtag Settings. Get it from Hashtag Get Sectors API."))
 
 	contact = frappe.get_doc("Contact", shipment.delivery_contact) if frappe.db.exists("Contact", shipment.get("delivery_contact")) else None
 	address = frappe.get_doc("Address", shipment.delivery_address_name)
+	sector_id = _first(shipment.get("hashtag_sector_id"), address.get("hashtag_sector_id"), settings.default_sector_id)
+	keyword = _first(shipment.get("hashtag_keyword"), address.get("hashtag_keyword"), settings.default_keyword)
+	if not sector_id:
+		frappe.throw(_("Hashtag Sector ID is required on the delivery Address, Shipment, or Hashtag Settings. Select the Hashtag area on the Address."))
 	phone_1 = _first(
 		shipment.get("delivery_contact_mobile"),
 		contact.get("mobile_no") if contact else "",
@@ -76,7 +85,7 @@ def build_shipment_payload(shipment) -> dict:
 
 	return {
 		"sector_id": sector_id,
-		"keyword": _first(shipment.get("hashtag_keyword"), settings.default_keyword),
+		"keyword": keyword,
 		"product_name": shipment.description_of_content or shipment.name,
 		"product_desc": shipment.description_of_content or "",
 		"phone_1": phone_1,
@@ -117,7 +126,17 @@ def create_hashtag_shipment(shipment_name: str):
 @frappe.whitelist()
 def get_hashtag_governments():
 	client = HashtagClient()
-	return client.post("/shipment.php?action=getAllGov", {})
+	response = client.post("/shipment.php?action=getAllGov", {})
+	if _response_rows(response):
+		return response
+
+	sectors_response = client.post("/shipment.php?action=getAllSectors", {"gov_id": ""})
+	governments = {}
+	for row in _response_rows(sectors_response):
+		gov_id = row.get("gov_id")
+		if gov_id and gov_id not in governments:
+			governments[gov_id] = {"id": gov_id, "name": row.get("gov_name") or gov_id}
+	return {"response": list(governments.values())}
 
 
 @frappe.whitelist()

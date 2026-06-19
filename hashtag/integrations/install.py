@@ -15,8 +15,10 @@ def install():
 	It avoids requiring a merge into an existing hooks.py/patches.txt, which makes it safer
 	for existing Hashtag repositories that already have their own app metadata files.
 	"""
+	create_address_fields()
 	create_shipment_fields()
 	create_shipment_client_script()
+	create_address_client_script()
 	frappe.db.commit()
 
 
@@ -124,12 +126,75 @@ def create_shipment_fields():
 	)
 
 
+def create_address_fields():
+	if not frappe.db.exists("DocType", "Address"):
+		return
+
+	create_custom_fields(
+		{
+			"Address": [
+				{
+					"fieldname": "hashtag_section",
+					"fieldtype": "Section Break",
+					"insert_after": "city",
+					"label": "Hashtag Delivery Area",
+				},
+				{
+					"fieldname": "hashtag_gov_id",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_section",
+					"label": "Hashtag Government ID",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_gov_name",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_gov_id",
+					"label": "Hashtag Government",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_sector_id",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_gov_name",
+					"label": "Hashtag Sector ID",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_sector_name",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_sector_id",
+					"label": "Hashtag Sector",
+					"read_only": 1,
+				},
+				{
+					"fieldname": "hashtag_keyword",
+					"fieldtype": "Data",
+					"insert_after": "hashtag_sector_name",
+					"label": "Hashtag Keyword",
+				},
+			],
+		},
+		ignore_validate=True,
+	)
+
+
 def create_shipment_client_script():
 	if not frappe.db.exists("DocType", "Client Script"):
 		return
 
-	script_name = "Hashtag Shipment Buttons"
-	js_path = Path(frappe.get_app_path("hashtag")) / "public" / "js" / "hashtag_shipment.js"
+	_create_client_script("Hashtag Shipment Buttons", "Shipment", "hashtag_shipment.js")
+
+
+def create_address_client_script():
+	if not frappe.db.exists("DocType", "Client Script"):
+		return
+
+	_create_client_script("Hashtag Address Area Picker", "Address", "hashtag_address.js")
+
+
+def _create_client_script(script_name: str, dt: str, filename: str):
+	js_path = Path(frappe.get_app_path("hashtag")) / "public" / "js" / filename
 	script = js_path.read_text(encoding="utf-8")
 
 	if frappe.db.exists("Client Script", script_name):
@@ -138,7 +203,7 @@ def create_shipment_client_script():
 		doc = frappe.new_doc("Client Script")
 		doc.name = script_name
 
-	doc.dt = "Shipment"
+	doc.dt = dt
 	doc.enabled = 1
 	doc.script = script
 	doc.save(ignore_permissions=True)
