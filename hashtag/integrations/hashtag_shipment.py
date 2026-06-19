@@ -107,6 +107,17 @@ def _set_if_allowed(shipment, fieldname: str, value):
 		shipment.set(fieldname, value)
 
 
+def _set_amount_if_allowed(shipment, amount):
+	if amount in (None, "") or not _field_can_update(shipment, "shipment_amount"):
+		return
+	try:
+		amount = float(amount)
+	except (TypeError, ValueError):
+		return
+	if amount and not float(shipment.get("shipment_amount") or 0):
+		shipment.shipment_amount = amount
+
+
 def _set_standard_status_if_allowed(shipment, status: str):
 	status = _standard_tracking_status(status)
 	for fieldname in ("tracking_status", "status", "shipment_status"):
@@ -260,15 +271,23 @@ def _apply_hashtag_response(shipment, response: dict):
 	item = _first_response_item(response)
 	tracking_number = _first(
 		_get_response_value(item, "waybill"),
-		_get_response_value(response, "tracking_number", "awb_number", "awb", "data.tracking_number", "data.awb_number", "data.awb"),
+		_get_response_value(response, "waybill", "tracking_number", "awb_number", "awb", "data.waybill", "data.tracking_number", "data.awb_number", "data.awb"),
 	)
-	shipment_id = _first(_get_response_value(item, "id"), _get_response_value(response, "shipment_id", "id", "data.shipment_id", "data.id"))
+	shipment_id = _first(
+		_get_response_value(item, "id"),
+		_get_response_value(response, "id", "shipment_id", "data.id", "data.shipment_id"),
+	)
 	status = _first(
 		_get_response_value(item, "status_en", "name_en", "status_ar", "name_ar"),
 		_get_response_value(response, "status", "shipment_status", "data.status", "data.shipment_status"),
 		"Created",
 	)
 	label_url = _get_response_value(response, "label_url", "tracking_url", "data.label_url", "data.tracking_url")
+	amount = _first(
+		_get_response_value(item, "shipment_amount", "amount", "price", "cod"),
+		_get_response_value(response, "shipment_amount", "amount", "price", "cod", "data.shipment_amount", "data.amount", "data.price", "data.cod"),
+		shipment.get("value_of_goods"),
+	)
 
 	shipment.hashtag_shipment_created = 1
 	shipment.hashtag_shipment_id = shipment_id
@@ -281,6 +300,7 @@ def _apply_hashtag_response(shipment, response: dict):
 	_set_if_allowed(shipment, "shipment_id", shipment_id)
 	_set_if_allowed(shipment, "awb_number", tracking_number)
 	_set_if_allowed(shipment, "tracking_url", label_url)
+	_set_amount_if_allowed(shipment, amount)
 	if status:
 		_set_standard_status_if_allowed(shipment, status)
 

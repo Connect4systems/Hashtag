@@ -180,7 +180,7 @@ def create_shipment_fields():
 
 def configure_shipment_integration_fields():
 	if frappe.db.exists("DocType", "Shipment"):
-		for fieldname in ("tracking_status",):
+		for fieldname in ("tracking_status", "shipment_amount"):
 			if frappe.get_meta("Shipment").get_field(fieldname):
 				make_property_setter("Shipment", fieldname, "allow_on_submit", 1, "Check", for_doctype=False)
 
